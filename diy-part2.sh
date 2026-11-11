@@ -23,16 +23,22 @@ ln -sf ../../../feeds/cswpackages/pon/luci-app-iptv package/feeds/cswpackages/lu
 
 # 1c) lede 独有的 LuCI 小应用（官方 luci 与四个源都没有）：从 coolsnowwolf/luci 的
 #     openwrt-25.12 分支（lede 现行 feeds 用的就是这个分支，不是 master）稀疏克隆，
-#     把种子里选了的几个拷进 package/feeds/ledeapps/——与 feeds 链接同级，
-#     defconfig 可见，各应用自带的 po 中文包会随 LUCI_LANG_zh_Hans 自动生成。
+#     把种子里选了的六个拷进 package/feeds/cswpackages/。
+#     v2 的教训（run 4，2026-11-10 晚查日志定性）：克隆和拷贝都没失败，死因是
+#     v2 拷进的 package/feeds/ledeapps/ 从没在 feeds.conf 登记过，defconfig 扫描
+#     时直接跳过，种子里的六个选项成了无主符号被丢掉。修法：不用新目录，沿用 1b
+#     已验证的路子——vlmcsd、iptv 就是链进 cswpackages 才进包的。拷贝方式不变
+#     （cp -r 实拷，不用软链，/tmp 源在同一次构建内有效），只换目的地。
+#     各应用自带的 po 中文包会随 LUCI_LANG_zh_Hans 自动生成。
 #     依赖均已核过：arpbind→ip-full、autoreboot→luci、filetransfer→luci-compat、
 #     oui→luci-base、rclone→rclone-config、vlmcsd 面板→vlmcsd 本体（1b 已链）。
 #     luci-app-vsftpd 没拉：它依赖的 vsftpd-alt 找不到干净来源，先放弃。
 git clone --depth 1 --filter=blob:none --sparse --branch openwrt-25.12 https://github.com/coolsnowwolf/luci.git /tmp/lede-luci
 git -C /tmp/lede-luci sparse-checkout set applications/luci-app-arpbind applications/luci-app-autoreboot applications/luci-app-filetransfer applications/luci-app-oui applications/luci-app-rclone applications/luci-app-vlmcsd
-mkdir -p package/feeds/ledeapps
+rm -rf package/feeds/ledeapps
+mkdir -p package/feeds/cswpackages
 for app in luci-app-arpbind luci-app-autoreboot luci-app-filetransfer luci-app-oui luci-app-rclone luci-app-vlmcsd; do
-  cp -r "/tmp/lede-luci/applications/$app" package/feeds/ledeapps/
+  cp -r "/tmp/lede-luci/applications/$app" package/feeds/cswpackages/
 done
 
 # 2) 修改默认管理 IP：192.168.1.1 -> 192.168.31.1（AX3000T 既定地址，与 run 20/22 一致）
