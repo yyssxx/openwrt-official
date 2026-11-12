@@ -22,9 +22,11 @@ echo 'src-git passwall2 https://github.com/Openwrt-Passwall/openwrt-passwall2.gi
 # 整源追加在 feeds.conf 最后：install -a 阶段同名包以官方源优先，不扰动默认选择。
 echo 'src-git cswpackages https://github.com/coolsnowwolf/packages.git' >> feeds.conf.default
 
-# ledeapps：lede 独有的六个 LuCI 小应用（arpbind、autoreboot、filetransfer、
-# oui、rclone、vlmcsd 面板），官方 luci 与四个源都没有，只能从
+# ledeapps：lede 独有的 LuCI 小应用，官方 luci 与四个源都没有，只能从
 # coolsnowwolf/luci 的 openwrt-25.12 分支（lede 现行 feeds 用的分支）取。
+# run 6 时是六个（arpbind、autoreboot、filetransfer、oui、rclone、vlmcsd 面板）；
+# run 7 起按 Yu 2026-11-12 的取舍只留三个：autoreboot、filetransfer、luci-app-vlmcsd
+# （砍 arpbind、oui、rclone——rclone 本体约 23MB，是 run 6 超重主因之一）。
 # 以 src-link 本地源登记进 feeds.conf，让 feeds update/install 走正规流程：
 # install 生成的符号链接指向克隆目录内的真实路径，这一点是成败关键——
 # 这六个应用的 Makefile 都是相对引用 `include ../../luci.mk`，只有当应用的
@@ -32,13 +34,13 @@ echo 'src-git cswpackages https://github.com/coolsnowwolf/packages.git' >> feeds
 # luci.mk 上。v2（自创 ledeapps 目录 cp -r）与 v3（cp -r 进 cswpackages）
 # 两次失败都是死在这里：物理路径变了，luci.mk 找不到，Makefile 解析失败，
 # 包在 defconfig 前就静默消失（run 4 / run 5 两炉 buildinfo 实证）。
-# 稀疏克隆只取六个应用 + build 目录（luci.mk 生成翻译时可能用到）；
+# 稀疏克隆只取留下的三个应用 + build 目录（luci.mk 生成翻译时可能用到）；
 # cone 模式下仓库根目录的文件（含 luci.mk）会自动带出。
 git clone --depth 1 --filter=blob:none --sparse --branch openwrt-25.12 https://github.com/coolsnowwolf/luci.git /tmp/lede-luci
-git -C /tmp/lede-luci sparse-checkout set applications/luci-app-arpbind applications/luci-app-autoreboot applications/luci-app-filetransfer applications/luci-app-oui applications/luci-app-rclone applications/luci-app-vlmcsd build
+git -C /tmp/lede-luci sparse-checkout set applications/luci-app-autoreboot applications/luci-app-filetransfer applications/luci-app-vlmcsd build
 # 硬校验：关键文件不在就当场判死这一步，别再让失败静默滑到 defconfig。
 test -f /tmp/lede-luci/luci.mk || { echo "ERROR: /tmp/lede-luci/luci.mk 不存在，稀疏克隆不完整"; exit 1; }
-for app in luci-app-arpbind luci-app-autoreboot luci-app-filetransfer luci-app-oui luci-app-rclone luci-app-vlmcsd; do
+for app in luci-app-autoreboot luci-app-filetransfer luci-app-vlmcsd; do
   test -f "/tmp/lede-luci/applications/$app/Makefile" || { echo "ERROR: $app 的 Makefile 不存在"; exit 1; }
 done
 echo 'src-link ledeapps /tmp/lede-luci' >> feeds.conf.default
