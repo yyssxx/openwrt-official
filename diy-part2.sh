@@ -21,10 +21,20 @@ ln -sf ../../../feeds/cswpackages/lang/golang package/feeds/cswpackages/golang
 ln -sf ../../../feeds/cswpackages/net/vlmcsd package/feeds/cswpackages/vlmcsd
 ln -sf ../../../feeds/cswpackages/pon/luci-app-iptv package/feeds/cswpackages/luci-app-iptv
 
-# 1c) lede 独有的六个 LuCI 小应用已改走 diy-part1 登记的 ledeapps 本地源
-#     （src-link），feeds install 会把它们链进 package/feeds/ledeapps/，
-#     这里不再做任何拷贝——v2/v3 在此处 cp -r 的两次失败教训见 diy-part1
-#     里 ledeapps 段的注释（相对引用 ../../luci.mk 与物理路径的问题）。
+# 1c) lede 独有的 LuCI 小应用（run 7 起只剩三个）已改走 diy-part1 登记的
+#     ledeapps 本地源（src-link），feeds install 会把它们链进
+#     package/feeds/ledeapps/，这里不再做任何拷贝——v2/v3 在此处 cp -r 的
+#     两次失败教训见 diy-part1 里 ledeapps 段的注释（相对引用 ../../luci.mk
+#     与物理路径的问题）。
+
+# 1d) luci-app-turboacc（run 7 新增）：chenmozhijin 为官方树适配的版本，
+#     不在现有任何源里，整仓克隆后只取应用目录。它与 1c 那批应用正好相反：
+#     Makefile 用绝对引用 include $(TOPDIR)/feeds/luci/luci.mk，物理路径
+#     无所谓，cp -r 进已登记的 cswpackages 目录是安全的。种子侧必须钉关
+#     INCLUDE_NFT_FULLCONE（依赖的 kmod-nft-fullcone 各源都没有），见种子注释。
+git clone --depth 1 https://github.com/chenmozhijin/turboacc.git /tmp/turboacc
+cp -r /tmp/turboacc/luci-app-turboacc package/feeds/cswpackages/luci-app-turboacc
+test -f package/feeds/cswpackages/luci-app-turboacc/Makefile || { echo "ERROR: luci-app-turboacc 拷贝失败"; exit 1; }
 
 # 2) 修改默认管理 IP：192.168.1.1 -> 192.168.31.1（AX3000T 既定地址，与 run 20/22 一致）
 sed -i 's/192.168.1.1/192.168.31.1/g' package/base-files/files/bin/config_generate
