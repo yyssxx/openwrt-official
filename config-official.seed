@@ -1,9 +1,18 @@
 # ============================================================
 # 官方 OpenWrt 24.10 树种子配置：Xiaomi AX3000T（原厂布局）
 # 用法：工作流里 CONFIG_FILE 指向本文件，defconfig 会展开成完整 .config。
-# 选包口径 = config-ax3000t.frpc（Yu 2026-11-06 定版），仅两处偏差见 PREP-NOTES.md：
-#   1) naive 走双路：加回 naiveproxy + INCLUDE_NaiveProxy（理由见 PREP-NOTES）
-#   2) xfrpc 已按既定决定换成官方 frpc（.frpc 本来就是这么改的，此处沿用）
+# 选包口径 = config-ax3000t.frpc（Yu 2026-11-06 定版），偏差见 PREP-NOTES.md。
+#
+# run 7 改动（相对 run 6，均为 Yu 2026-11-12 晚逐项拍板）：
+#   1) 暂时移除 PassWall2（其 sing-box/haproxy/geoview 栈约省 15-20MB root，
+#      是 run 6 超重的主因之一；diy-part1 里 passwall 两源保留，将来恢复只加种子行）
+#   2) lede 小应用六砍三：留 filetransfer、vlmcsd 面板、autoreboot；
+#      砍 arpbind、oui、rclone（rclone 本体约 23MB，是 run 6 超重的另一主因）
+#   3) 新增 luci-app-turboacc（chenmozhijin 官方树适配版，来源见 diy-part2 1d 段；
+#      其 INCLUDE_NFT_FULLCONE 必须钉关——依赖的 kmod-nft-fullcone 各源都没有）
+#   4) 砍独立版 naiveproxy + INCLUDE_NaiveProxy：2026-11-12 实机验证，删掉
+#      /usr/bin/naive 后 SSR Plus 里 Xray 类型的 naive 节点照常连通（D2 同样），
+#      独立版只剩一个面板入口作用，不值得编。保留 CONFIG_XRAY_CORE_NAIVE=y。
 # ============================================================
 
 # ---- 目标设备（官方树设备名） ----
@@ -44,7 +53,9 @@ CONFIG_PACKAGE_luci-theme-bootstrap=y
 # ---- SSR Plus（helloworld 源） ----
 CONFIG_PACKAGE_luci-app-ssr-plus=y
 CONFIG_PACKAGE_luci-app-ssr-plus_INCLUDE_Xray=y
-CONFIG_PACKAGE_luci-app-ssr-plus_INCLUDE_NaiveProxy=y
+# run 7 起钉关（见头部改动 4）：不钉这行时若上游默认值为 y，会把 naiveproxy
+# 又拖回镜像（且 luci-app-ssr-plus 的 opkg 依赖里会再出现 naiveproxy）。
+# CONFIG_PACKAGE_luci-app-ssr-plus_INCLUDE_NaiveProxy is not set
 CONFIG_PACKAGE_luci-app-ssr-plus_INCLUDE_Shadowsocks_NONE_Client=y
 CONFIG_PACKAGE_luci-app-ssr-plus_INCLUDE_Shadowsocks_NONE_Server=y
 # 显式关掉 ChinaDNS_NG / MosDNS 两个 Include（符号在上游真实存在）：与 config-12
@@ -53,16 +64,24 @@ CONFIG_PACKAGE_luci-app-ssr-plus_INCLUDE_Shadowsocks_NONE_Server=y
 # 上游删除（24.10 下 ssr-plus 本就 nftables 专用），旧种子里的对应行是死行，已删。
 # CONFIG_PACKAGE_luci-app-ssr-plus_INCLUDE_ChinaDNS_NG is not set
 # CONFIG_PACKAGE_luci-app-ssr-plus_INCLUDE_MosDNS is not set
-# naive 双路之二：独立 naiveproxy 客户端（/usr/bin/naive）
-CONFIG_PACKAGE_naiveproxy=y
-# naive 双路之一：coolsnowwolf 版 xray-core 的 Cronet naive 出站（d2 上已验证）
+# naive 单路：coolsnowwolf 版 xray-core 的 Cronet naive 出站（run 7 起唯一 naive 路，
+# 2026-11-12 AX3000T 实机 + D2 双验证；独立版 naiveproxy 已砍，见头部改动 4）
 CONFIG_XRAY_CORE_NAIVE=y
 
-# ---- PassWall2（passwall 源，与 SSR Plus 共存） ----
-CONFIG_PACKAGE_luci-app-passwall2=y
-CONFIG_PACKAGE_luci-app-passwall2_Basic_Core_SingBox=y
-CONFIG_PACKAGE_luci-app-passwall2_INCLUDE_Haproxy=y
-CONFIG_PACKAGE_luci-app-passwall2_Nftables_Transparent_Proxy=y
+# ---- PassWall2：run 7 起暂时移除（Yu 2026-11-12 定，见头部改动 1） ----
+# 显式钉关防上游默认变化；diy-part1 的 passwall 两源保留，恢复时删本行、
+# 加回 luci-app-passwall2 本体与三个 Include 行即可。
+# CONFIG_PACKAGE_luci-app-passwall2 is not set
+
+# ---- TurboACC（chenmozhijin 官方树适配版，来源见 diy-part2 1d 段） ----
+CONFIG_PACKAGE_luci-app-turboacc=y
+# 全锥 NAT 子选项必须钉关：kmod-nft-fullcone 在官方源/helloworld/passwall/
+# cswpackages 里都不存在，而此 Include 默认 y，不钉关会让整个 turboacc
+# 因依赖不满足被 defconfig 静默丢弃。分载与 BBR 两个模块顺手显式点亮，
+# 与该应用 INCLUDE_OFFLOADING / INCLUDE_BBR_CCA 的默认取值一致，双保险。
+# CONFIG_PACKAGE_luci-app-turboacc_INCLUDE_NFT_FULLCONE is not set
+CONFIG_PACKAGE_kmod-nft-offload=y
+CONFIG_PACKAGE_kmod-tcp-bbr=y
 
 # ---- Yu 选的其他应用（.frpc 口径，官方源均有对应包） ----
 CONFIG_PACKAGE_smartdns=y
@@ -77,36 +96,31 @@ CONFIG_PACKAGE_luci-app-ddns=y
 CONFIG_PACKAGE_luci-app-upnp=y
 CONFIG_PACKAGE_luci-app-wol=y
 CONFIG_PACKAGE_luci-app-autoreboot=y
-CONFIG_PACKAGE_luci-app-arpbind=y
 CONFIG_PACKAGE_luci-app-nlbwmon=y
 CONFIG_PACKAGE_luci-app-udpxy=y
 # luci-app-vsftpd 暂缺：依赖 vsftpd-alt，找不到干净来源（见 diy-part2 1c 注），
 # 死行先删；将来找到来源把本体行与中文包行一起加回。
 CONFIG_PACKAGE_luci-app-filetransfer=y
-CONFIG_PACKAGE_luci-app-rclone=y
-CONFIG_PACKAGE_luci-app-rclone_INCLUDE_rclone-ng=y
-CONFIG_PACKAGE_luci-app-rclone_INCLUDE_rclone-webui=y
 CONFIG_PACKAGE_luci-app-iptv=y
-CONFIG_PACKAGE_luci-app-oui=y
+# lede 小应用六砍三（run 7，见头部改动 2）：arpbind、oui、rclone 已砍，
+# diy-part1 的稀疏克隆清单同步只取留下的三个（autoreboot、filetransfer、
+# luci-app-vlmcsd 面板在上面/克隆清单里）。
 
 # ---- 中文包 ----
 CONFIG_PACKAGE_luci-i18n-base-zh-cn=y
 CONFIG_PACKAGE_luci-i18n-firewall-zh-cn=y
 CONFIG_PACKAGE_luci-i18n-package-manager-zh-cn=y
 CONFIG_PACKAGE_luci-i18n-ssr-plus-zh-cn=y
-CONFIG_PACKAGE_luci-i18n-passwall2-zh-cn=y
 CONFIG_PACKAGE_luci-i18n-smartdns-zh-cn=y
 CONFIG_PACKAGE_luci-i18n-cloudflared-zh-cn=y
-CONFIG_PACKAGE_luci-i18n-oui-zh-cn=y
-CONFIG_PACKAGE_luci-i18n-rclone-zh-cn=y
 CONFIG_PACKAGE_luci-i18n-vlmcsd-zh-cn=y
 CONFIG_PACKAGE_luci-i18n-frpc-zh-cn=y
 CONFIG_PACKAGE_luci-i18n-ddns-zh-cn=y
 CONFIG_PACKAGE_luci-i18n-upnp-zh-cn=y
 CONFIG_PACKAGE_luci-i18n-wol-zh-cn=y
 CONFIG_PACKAGE_luci-i18n-autoreboot-zh-cn=y
-CONFIG_PACKAGE_luci-i18n-arpbind-zh-cn=y
 CONFIG_PACKAGE_luci-i18n-nlbwmon-zh-cn=y
 CONFIG_PACKAGE_luci-i18n-udpxy-zh-cn=y
 CONFIG_PACKAGE_luci-i18n-filetransfer-zh-cn=y
 CONFIG_PACKAGE_luci-i18n-iptv-zh-cn=y
+CONFIG_PACKAGE_luci-i18n-turboacc-zh-cn=y
